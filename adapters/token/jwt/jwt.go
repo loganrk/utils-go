@@ -32,13 +32,18 @@ func New(method string, hmacKey []byte, privateKeyPath, publicKeyPath string) (*
 			return nil, fmt.Errorf("HMAC key is missing for JWT method %s", method)
 		}
 	case "RSA", "RS256", "RS384", "RS512":
-		privateKey, err = loadRSAPrivKeyFromFile(privateKeyPath)
-		if err != nil {
-			return nil, err
+		if privateKeyPath != "" {
+			privateKey, err = loadRSAPrivKeyFromFile(privateKeyPath)
+			if err != nil {
+				return nil, err
+			}
 		}
-		publicKey, err = loadRSAPubKeyFromFile(publicKeyPath)
-		if err != nil {
-			return nil, err
+
+		if publicKeyPath != "" {
+			publicKey, err = loadRSAPubKeyFromFile(publicKeyPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	default:
 		return nil, errors.New("unsupported signing method: " + method)
