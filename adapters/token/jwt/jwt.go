@@ -32,13 +32,18 @@ func New(method string, hmacKey []byte, privateKeyPath, publicKeyPath string) (*
 			return nil, fmt.Errorf("HMAC key is missing for JWT method %s", method)
 		}
 	case "RSA", "RS256", "RS384", "RS512":
-		privateKey, err = loadRSAPrivKeyFromFile(privateKeyPath)
-		if err != nil {
-			return nil, err
+		if privateKeyPath != "" {
+			privateKey, err = loadRSAPrivKeyFromFile(privateKeyPath)
+			if err != nil {
+				return nil, err
+			}
 		}
-		publicKey, err = loadRSAPubKeyFromFile(publicKeyPath)
-		if err != nil {
-			return nil, err
+
+		if publicKeyPath != "" {
+			publicKey, err = loadRSAPubKeyFromFile(publicKeyPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	default:
 		return nil, errors.New("unsupported signing method: " + method)
@@ -184,6 +189,33 @@ func (t *token) GetRefreshTokenData(encryptedToken string) (int, time.Time, erro
 
 	// Validate the token type, should be "refresh"
 	if tokenType, ok := claims["type"].(string); !ok || tokenType != "refresh" {
+		return 0, time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
+	}
+
+	// Extract the user ID and expiration time from the claims
+	uid, ok := claims["uid"].(float64)
+	if !ok {
+		return 0, time.Time{}, errors.New("user id (`uid`) not found in token")
+	}
+
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return 0, time.Time{}, errors.New("expiration time (`exp`) not found in token")
+	}
+
+	return int(uid), time.Unix(int64(exp), 0), nil // Return user ID and expiration time
+}
+
+// GetAccessTokenData extracts and returns the user ID and expiration time from a refresh token
+// It parses the token and validates the type and claims, returning an error if any validation fails
+func (t *token) GetAccessTokenData(encryptedToken string) (int, time.Time, error) {
+	claims, err := t.parseTokenWithVerification(encryptedToken)
+	if err != nil {
+		return 0, time.Time{}, err // Return error if token parsing fails
+	}
+
+	// Validate the token type, should be "refresh"
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "access" {
 		return 0, time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
 	}
 
