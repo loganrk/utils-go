@@ -16,7 +16,7 @@ type produceMessager struct {
 
 // New initializes a new Kafka producer with client ID, version, and retry configuration.
 // It returns a Messager adapter for publishing email-related events.
-func NewProducer(appName string, brokers []string, verificationTopic, passwordResetTopic, clientID, version string, retryMax int) (*kafkaMessager, error) {
+func NewUserProducer(appName string, brokers []string, verificationTopic, passwordResetTopic, clientID, version string, retryMax int) (*produceMessager, error) {
 	kConfig := sarama.NewConfig()
 
 	// Set client ID for Kafka tracing and logging
@@ -122,11 +122,11 @@ func (p *produceMessager) PublishPasswordResetPhone(phone, name, token string) e
 		Macros: map[string]string{
 			"name":    name,
 			"token":   token,
-			"appName": k.appName,
+			"appName": p.appName,
 		},
 	}
 
-	return p.publish(k.topicPasswordReset, phone, payload)
+	return p.publish(p.topicPasswordReset, phone, payload)
 }
 
 // publish marshals the payload and sends it to the specified Kafka topic with the given key.
