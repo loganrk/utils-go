@@ -3,20 +3,31 @@ package kafka
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/IBM/sarama"
 )
 
-type produceMessager struct {
+// Message is the structure expected from Kafka.
+type message struct {
+	Type    string            `json:"type"`    // e.g., "activation_email", "reset_phone"
+	To      string            `json:"to"`      // email or phone
+	Subject string            `json:"subject"` // only for email
+	Macros  map[string]string `json:"macros"`  // template variables
+}
+
+type producer struct {
 	appName            string
 	producer           sarama.SyncProducer
+	verificationLink   string
 	topicVerification  string
+	passwordResetLink  string
 	topicPasswordReset string
 }
 
 // New initializes a new Kafka producer with client ID, version, and retry configuration.
 // It returns a Messager adapter for publishing email-related events.
-func NewUserProducer(appName string, brokers []string, verificationTopic, passwordResetTopic, clientID, version string, retryMax int) (*produceMessager, error) {
+func New(appName string, brokers []string, clientID, version string, retryMax int) (*producer, error) {
 	kConfig := sarama.NewConfig()
 
 	// Set client ID for Kafka tracing and logging
@@ -39,29 +50,36 @@ func NewUserProducer(appName string, brokers []string, verificationTopic, passwo
 	}
 
 	// Return the Messager instance
-	return &produceMessager{
-		appName:            appName,
-		producer:           producer,
-		topicVerification:  verificationTopic,
-		topicPasswordReset: passwordResetTopic,
+	return &producer{
+		appName:  appName,
+		producer: producer,
 	}, nil
 }
 
-// PublishVerification sends a user verify email event to the Kafka topic.
-func (p *produceMessager) PublishVerificationEmail(toAddress, subject, name, token string) error {
+// RegisterPasswordReset sets the Kafka topic and link for password reset emails.
+func (p *producer) RegisterPasswordReset(topic, link string) {
+	p.topicPasswordReset = topic
+	p.passwordResetLink = link
+}
 
-	payload := struct {
-		Type    string            `json:"type"`
-		To      string            `json:"to"`
-		Subject string            `json:"subject"`
-		Macros  map[string]string `json:"macros"`
-	}{
+// RegisterVerification sets the Kafka topic and link for verification emails.
+func (p *producer) RegisterVerification(topic, link string) {
+	p.topicVerification = topic
+	p.verificationLink = link
+}
+
+// PublishVerification sends a user verify email event to the Kafka topic.
+func (p *producer) PublishVerificationEmail(toAddress, subject, name, token string) error {
+
+	link := strings.Replace(p.verificationLink, "{{token}}", token, 1)
+
+	payload := message{
 		Type:    "verification-email",
 		To:      toAddress,
 		Subject: subject,
 		Macros: map[string]string{
 			"name":    name,
-			"token":   token,
+			"link":    link,
 			"appName": p.appName,
 		},
 	}
@@ -70,53 +88,42 @@ func (p *produceMessager) PublishVerificationEmail(toAddress, subject, name, tok
 }
 
 // PublishPasswordResetEmail sends a password reset email event to the Kafka topic.
-func (k *produceMessager) PublishPasswordResetEmail(toAddress, subject, name, token string) error {
-	payload := struct {
-		Type    string            `json:"type"`
-		To      string            `json:"to"`
-		Subject string            `json:"subject"`
-		Macros  map[string]string `json:"macros"`
-	}{
+func (p *producer) PublishPasswordResetEmail(toAddress, subject, name, token string) error {
+	link := strings.Replace(p.verificationLink, "{{token}}", token, 1)
+
+	payload := message{
 		Type:    "password-reset-email",
 		To:      toAddress,
 		Subject: subject,
 		Macros: map[string]string{
 			"name":    name,
-			"token":   token,
-			"appName": k.appName,
+			"link":    link,
+			"appName": p.appName,
 		},
 	}
 
-	return k.publish(k.topicPasswordReset, toAddress, payload)
+	return p.publish(p.topicPasswordReset, toAddress, payload)
 }
 
 // PublishVerificationPhone sends a user verify phone event to the Kafka topic.
-func (k *produceMessager) PublishVerificationPhone(phone, name, token string) error {
+func (p *producer) PublishVerificationPhone(phone, name, token string) error {
 
-	payload := struct {
-		Type   string            `json:"type"`
-		To     string            `json:"to"`
-		Macros map[string]string `json:"macros"`
-	}{
+	payload := message{
 		Type: "verification-phone",
 		To:   phone,
 		Macros: map[string]string{
 			"name":    name,
 			"token":   token,
-			"appName": k.appName,
+			"appName": p.appName,
 		},
 	}
 
-	return k.publish(k.topicVerification, phone, payload)
+	return p.publish(p.topicVerification, phone, payload)
 }
 
 // PublishPasswordResetPhone sends a password reset phone event to the Kafka topic.
-func (p *produceMessager) PublishPasswordResetPhone(phone, name, token string) error {
-	payload := struct {
-		Type   string            `json:"type"`
-		To     string            `json:"to"`
-		Macros map[string]string `json:"macros"`
-	}{
+func (p *producer) PublishPasswordResetPhone(phone, name, token string) error {
+	payload := message{
 		Type: "password-reset-email",
 		To:   phone,
 		Macros: map[string]string{
@@ -130,7 +137,7 @@ func (p *produceMessager) PublishPasswordResetPhone(phone, name, token string) e
 }
 
 // publish marshals the payload and sends it to the specified Kafka topic with the given key.
-func (p *produceMessager) publish(topic string, key string, payload any) error {
+func (p *producer) publish(topic string, key string, payload any) error {
 	value, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message payload: %w", err)
