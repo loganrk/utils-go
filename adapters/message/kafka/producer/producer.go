@@ -1,9 +1,8 @@
-package kafka
+package producer
 
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/IBM/sarama"
 )
@@ -19,9 +18,7 @@ type message struct {
 type producer struct {
 	appName            string
 	producer           sarama.SyncProducer
-	verificationLink   string
 	topicVerification  string
-	passwordResetLink  string
 	topicPasswordReset string
 }
 
@@ -44,7 +41,7 @@ func New(appName string, brokers []string, clientID, version string, retryMax in
 	kConfig.Producer.Return.Successes = true
 	kConfig.Producer.Retry.Max = retryMax
 	// Create Kafka producer
-	producer, err := sarama.NewSyncProducer(brokers, kConfig)
+	producerIns, err := sarama.NewSyncProducer(brokers, kConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka producer: %w", err)
 	}
@@ -52,26 +49,22 @@ func New(appName string, brokers []string, clientID, version string, retryMax in
 	// Return the Messager instance
 	return &producer{
 		appName:  appName,
-		producer: producer,
+		producer: producerIns,
 	}, nil
 }
 
-// RegisterPasswordReset sets the Kafka topic and link for password reset emails.
-func (p *producer) RegisterPasswordReset(topic, link string) {
+// RegisterPasswordReset sets the Kafka topic  for password reset emails.
+func (p *producer) RegisterPasswordReset(topic string) {
 	p.topicPasswordReset = topic
-	p.passwordResetLink = link
 }
 
-// RegisterVerification sets the Kafka topic and link for verification emails.
-func (p *producer) RegisterVerification(topic, link string) {
+// RegisterVerification sets the Kafka topic  for verification emails.
+func (p *producer) RegisterVerification(topic string) {
 	p.topicVerification = topic
-	p.verificationLink = link
 }
 
 // PublishVerification sends a user verify email event to the Kafka topic.
-func (p *producer) PublishVerificationEmail(toAddress, subject, name, token string) error {
-
-	link := strings.Replace(p.verificationLink, "{{token}}", token, 1)
+func (p *producer) PublishVerificationEmail(toAddress, subject, name, link string) error {
 
 	payload := message{
 		Type:    "verification-email",
@@ -88,9 +81,7 @@ func (p *producer) PublishVerificationEmail(toAddress, subject, name, token stri
 }
 
 // PublishPasswordResetEmail sends a password reset email event to the Kafka topic.
-func (p *producer) PublishPasswordResetEmail(toAddress, subject, name, token string) error {
-	link := strings.Replace(p.verificationLink, "{{token}}", token, 1)
-
+func (p *producer) PublishPasswordResetEmail(toAddress, subject, name, link string) error {
 	payload := message{
 		Type:    "password-reset-email",
 		To:      toAddress,
