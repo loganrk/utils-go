@@ -100,24 +100,24 @@ func (t *token) signToken(claims jwt.Claims) (string, error) {
 
 // CreateAccessToken generates an access token with the user's ID, username, name, and expiration time
 // It returns the signed access token as a string or an error if the signing process fails
-func (t *token) CreateAccessToken(uid int, uname, name string, expiry time.Time) (string, error) {
+func (t *token) CreateAccessToken(userSubscriptionId string, uname, name string, expiry time.Time) (string, error) {
 	claims := jwt.MapClaims{
-		"type":  "access",      // Token type, set as "access" for access tokens
-		"uid":   uid,           // User ID
-		"uname": uname,         // Username
-		"name":  name,          // User's full name
-		"exp":   expiry.Unix(), // Expiration time of the token in Unix format
+		"type":  "access",           // Token type, set as "access" for access tokens
+		"usi":   userSubscriptionId, // User Subscriber ID
+		"uname": uname,              // Username
+		"name":  name,               // User's full name
+		"exp":   expiry.Unix(),      // Expiration time of the token in Unix format
 	}
 	return t.signToken(claims) // Sign and return the token
 }
 
 // CreateRefreshToken generates a refresh token with the user's ID and expiration time
 // It returns the signed refresh token as a string or an error if the signing process fails
-func (t *token) CreateRefreshToken(uid int, expiry time.Time) (string, error) {
+func (t *token) CreateRefreshToken(userSubscriptionId string, expiry time.Time) (string, error) {
 	claims := jwt.MapClaims{
-		"type": "refresh",     // Token type, set as "refresh" for refresh tokens
-		"uid":  uid,           // User ID
-		"exp":  expiry.Unix(), // Expiration time of the token in Unix format
+		"type": "refresh",          // Token type, set as "refresh" for refresh tokens
+		"usi":  userSubscriptionId, // User Subscriber ID
+		"exp":  expiry.Unix(),      // Expiration time of the token in Unix format
 	}
 	return t.signToken(claims) // Sign and return the token
 }
@@ -181,56 +181,56 @@ func (t *token) parseTokenWithVerification(encryptedToken string) (jwt.MapClaims
 
 // GetRefreshTokenData extracts and returns the user ID and expiration time from a refresh token
 // It parses the token and validates the type and claims, returning an error if any validation fails
-func (t *token) GetRefreshTokenData(encryptedToken string) (int, time.Time, error) {
+func (t *token) GetRefreshTokenData(encryptedToken string) (string, time.Time, error) {
 	claims, err := t.parseTokenWithVerification(encryptedToken)
 	if err != nil {
-		return 0, time.Time{}, err // Return error if token parsing fails
+		return "", time.Time{}, err // Return error if token parsing fails
 	}
 
 	// Validate the token type, should be "refresh"
 	if tokenType, ok := claims["type"].(string); !ok || tokenType != "refresh" {
-		return 0, time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
+		return "", time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
 	}
 
 	// Extract the user ID and expiration time from the claims
-	uid, ok := claims["uid"].(float64)
+	userSubscriptionId, ok := claims["usi"].(string)
 	if !ok {
-		return 0, time.Time{}, errors.New("user id (`uid`) not found in token")
+		return "", time.Time{}, errors.New("user subscriber id (`usi`) not found in token")
 	}
 
 	exp, ok := claims["exp"].(float64)
 	if !ok {
-		return 0, time.Time{}, errors.New("expiration time (`exp`) not found in token")
+		return "", time.Time{}, errors.New("expiration time (`exp`) not found in token")
 	}
 
-	return int(uid), time.Unix(int64(exp), 0), nil // Return user ID and expiration time
+	return userSubscriptionId, time.Unix(int64(exp), 0), nil // Return user ID and expiration time
 }
 
 // GetAccessTokenData extracts and returns the user ID and expiration time from a refresh token
 // It parses the token and validates the type and claims, returning an error if any validation fails
-func (t *token) GetAccessTokenData(encryptedToken string) (int, time.Time, error) {
+func (t *token) GetAccessTokenData(encryptedToken string) (string, time.Time, error) {
 	claims, err := t.parseTokenWithVerification(encryptedToken)
 	if err != nil {
-		return 0, time.Time{}, err // Return error if token parsing fails
+		return "", time.Time{}, err // Return error if token parsing fails
 	}
 
 	// Validate the token type, should be "refresh"
 	if tokenType, ok := claims["type"].(string); !ok || tokenType != "access" {
-		return 0, time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
+		return "", time.Time{}, errors.New("token type (`type`) not found or mismatch in token")
 	}
 
 	// Extract the user ID and expiration time from the claims
-	uid, ok := claims["uid"].(float64)
+	userSubscriptionId, ok := claims["usi"].(string)
 	if !ok {
-		return 0, time.Time{}, errors.New("user id (`uid`) not found in token")
+		return "", time.Time{}, errors.New("user subscription id (`usi`) not found in token")
 	}
 
 	exp, ok := claims["exp"].(float64)
 	if !ok {
-		return 0, time.Time{}, errors.New("expiration time (`exp`) not found in token")
+		return "", time.Time{}, errors.New("expiration time (`exp`) not found in token")
 	}
 
-	return int(uid), time.Unix(int64(exp), 0), nil // Return user ID and expiration time
+	return userSubscriptionId, time.Unix(int64(exp), 0), nil // Return user ID and expiration time
 }
 
 // Function to load RSA public key from a PEM file
