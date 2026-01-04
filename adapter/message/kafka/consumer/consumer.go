@@ -10,10 +10,11 @@ import (
 
 // message is the structure expected from Kafka.
 type message struct {
-	Type    string            `json:"type"`    // e.g., "activation_email", "reset_phone"
-	To      string            `json:"to"`      // email or phone
-	Subject string            `json:"subject"` // only for email
-	Macros  map[string]string `json:"macros"`  // template variables
+	Type        string            `json:"type"`         // e.g., "activation_email", "reset_sms"
+	CountryCode string            `json:"country_code"` // only for sms
+	To          string            `json:"to"`           // email or sms
+	Subject     string            `json:"subject"`      // only for email
+	Macros      map[string]string `json:"macros"`       // template variables
 }
 
 // consumer is a Kafka adapter that handles two different consumer groups:
@@ -21,12 +22,12 @@ type message struct {
 type consumer struct {
 	activationTopic        string
 	activationConsumer     sarama.ConsumerGroup
-	activationPhoneHandler func(to string, macros map[string]string) error
+	activationSmsHandler   func(countryCode, to string, macros map[string]string) error
 	activationEmailHandler func(to, subject string, macros map[string]string) error
 
 	passwordResetTopic        string
 	passwordResetConsumer     sarama.ConsumerGroup
-	passwordResetPhoneHandler func(to string, macros map[string]string) error
+	passwordResetSmsHandler   func(countryCode, to string, macros map[string]string) error
 	passwordResetEmailHandler func(to, subject string, macros map[string]string) error
 
 	groupID      string
@@ -50,11 +51,11 @@ func New(brokers []string, groupID string) *consumer {
 // RegisterActivation sets both activation handlers at once
 func (c *consumer) RegisterActivation(
 	activationTopic string,
-	phoneHandler func(to string, macros map[string]string) error,
+	smsHandler func(countryCode, to string, macros map[string]string) error,
 	emailHandler func(to, subject string, macros map[string]string) error,
 ) error {
 	c.activationTopic = activationTopic
-	c.activationPhoneHandler = phoneHandler
+	c.activationSmsHandler = smsHandler
 	c.activationEmailHandler = emailHandler
 
 	activationConsumer, err := sarama.NewConsumerGroup(c.brokers, c.groupID, c.saramaConfig)
@@ -69,11 +70,11 @@ func (c *consumer) RegisterActivation(
 // RegisterPasswordResetHandlers sets both password reset handlers at once
 func (c *consumer) RegisterPasswordResetHandlers(
 	passwordResetTopic string,
-	phoneHandler func(to string, macros map[string]string) error,
+	smsHandler func(countryCode, to string, macros map[string]string) error,
 	emailHandler func(to, subject string, macros map[string]string) error,
 ) error {
 	c.passwordResetTopic = passwordResetTopic
-	c.passwordResetPhoneHandler = phoneHandler
+	c.passwordResetSmsHandler = smsHandler
 	c.passwordResetEmailHandler = emailHandler
 
 	passwordResetConsumer, err := sarama.NewConsumerGroup(c.brokers, c.groupID, c.saramaConfig)
@@ -110,8 +111,8 @@ func (c *consumer) routeActivation(ctx context.Context, msgBytes []byte) error {
 	}
 
 	switch msg.Type {
-	case "verification-phone":
-		return c.activationPhoneHandler(msg.To, msg.Macros)
+	case "verification-sms":
+		return c.activationSmsHandler(msg.CountryCode, msg.To, msg.Macros)
 	case "verification-email":
 		return c.activationEmailHandler(msg.To, msg.Subject, msg.Macros)
 	default:
@@ -131,8 +132,8 @@ func (c *consumer) routePasswordReset(ctx context.Context, msgBytes []byte) erro
 	}
 
 	switch msg.Type {
-	case "password-reset-phone":
-		return c.passwordResetPhoneHandler(msg.To, msg.Macros)
+	case "password-reset-sms":
+		return c.passwordResetSmsHandler(msg.CountryCode, msg.To, msg.Macros)
 	case "password-reset-email":
 		return c.passwordResetEmailHandler(msg.To, msg.Subject, msg.Macros)
 	default:
