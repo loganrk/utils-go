@@ -9,10 +9,11 @@ import (
 
 // Message is the structure expected from Kafka.
 type message struct {
-	Type    string            `json:"type"`    // e.g., "activation_email", "reset_phone"
-	To      string            `json:"to"`      // email or phone
-	Subject string            `json:"subject"` // only for email
-	Macros  map[string]string `json:"macros"`  // template variables
+	Type        string            `json:"type"`         // e.g., "activation_email", "reset_sms"
+	CountryCode string            `json:"country_code"` // only for sms
+	To          string            `json:"to"`           // email or sms
+	Subject     string            `json:"subject"`      // only for email
+	Macros      map[string]string `json:"macros"`       // template variables
 }
 
 type producer struct {
@@ -96,12 +97,13 @@ func (p *producer) PublishPasswordResetEmail(toAddress, subject, name, link stri
 	return p.publish(p.topicPasswordReset, toAddress, payload)
 }
 
-// PublishVerificationPhone sends a user verify phone event to the Kafka topic.
-func (p *producer) PublishVerificationPhone(phone, name, token string) error {
+// PublishVerificationSms sends a user verify sms event to the Kafka topic.
+func (p *producer) PublishVerificationSms(contryCode, to, name, token string) error {
 
 	payload := message{
-		Type: "verification-phone",
-		To:   phone,
+		Type:        "verification-sms",
+		CountryCode: contryCode,
+		To:          to,
 		Macros: map[string]string{
 			"name":    name,
 			"token":   token,
@@ -109,14 +111,15 @@ func (p *producer) PublishVerificationPhone(phone, name, token string) error {
 		},
 	}
 
-	return p.publish(p.topicVerification, phone, payload)
+	return p.publish(p.topicVerification, to, payload)
 }
 
-// PublishPasswordResetPhone sends a password reset phone event to the Kafka topic.
-func (p *producer) PublishPasswordResetPhone(phone, name, token string) error {
+// PublishPasswordResetSms sends a password reset sms event to the Kafka topic.
+func (p *producer) PublishPasswordResetSms(contryCode, to, name, token string) error {
 	payload := message{
-		Type: "password-reset-email",
-		To:   phone,
+		Type:        "password-reset-email",
+		CountryCode: contryCode,
+		To:          to,
 		Macros: map[string]string{
 			"name":    name,
 			"token":   token,
@@ -124,7 +127,7 @@ func (p *producer) PublishPasswordResetPhone(phone, name, token string) error {
 		},
 	}
 
-	return p.publish(p.topicPasswordReset, phone, payload)
+	return p.publish(p.topicPasswordReset, to, payload)
 }
 
 // publish marshals the payload and sends it to the specified Kafka topic with the given key.
