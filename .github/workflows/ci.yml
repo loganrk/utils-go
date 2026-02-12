@@ -1,0 +1,32 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod tidy
+
+      - name: Run tests with coverage
+        run: go test -mod=mod ./... -covermode=count -coverprofile=coverage.out
+
+      - name: Enforce minimum coverage (80%)
+        run: |
+          total_cov=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
+          echo "Total coverage: ${total_cov}%"
+          awk -v cov="$total_cov" 'BEGIN { if (cov < 80) { printf("Coverage %.2f%% is below 80%%\n", cov); exit 1 } else { printf("Coverage %.2f%% meets requirement\n", cov) } }'
